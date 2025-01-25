@@ -36,6 +36,7 @@ type TransferConfigBase struct {
 	IncludeReposPatterns     []string
 	ExcludeReposPatterns     []string
 	FederatedMembersRemoved  bool
+	SkipProjectAssignments   bool
 }
 
 func NewTransferConfigBase(sourceServer, targetServer *config.ServerDetails) *TransferConfigBase {
@@ -52,6 +53,11 @@ func (tcb *TransferConfigBase) SetIncludeReposPatterns(includeReposPatterns []st
 
 func (tcb *TransferConfigBase) SetExcludeReposPatterns(excludeReposPatterns []string) *TransferConfigBase {
 	tcb.ExcludeReposPatterns = excludeReposPatterns
+	return tcb
+}
+
+func (tcb *TransferConfigBase) SetSkipProjectAssignments(skipProjectAssignments bool) *TransferConfigBase {
+	tcb.SkipProjectAssignments = skipProjectAssignments
 	return tcb
 }
 
@@ -156,6 +162,7 @@ func (tcb *TransferConfigBase) TransferRepositoriesToTarget(reposToTransfer map[
 			return
 		}
 	}
+
 	// Transfer local, federated and unknown repositories.
 	for _, repoType := range []utils.RepoType{utils.Local, utils.Federated, utils.Unknown} {
 		if len(reposToTransfer[repoType]) == 0 {
@@ -166,9 +173,7 @@ func (tcb *TransferConfigBase) TransferRepositoriesToTarget(reposToTransfer map[
 			return
 		}
 	}
-	if len(reposToTransfer[utils.Virtual]) == 0 {
-		return
-	}
+
 	return tcb.transferVirtualRepositoriesToTarget(reposToTransfer[utils.Virtual])
 }
 
@@ -209,6 +214,10 @@ func (tcb *TransferConfigBase) transferSpecificRepositoriesToTarget(reposToTrans
 // Transfer virtual repositories
 // reposToTransfer - Repositories names to transfer
 func (tcb *TransferConfigBase) transferVirtualRepositoriesToTarget(reposToTransfer []services.RepositoryDetails) (err error) {
+	if len(reposToTransfer) == 0 {
+		return // nothing to do
+	}
+
 	allReposParams := make(map[string]interface{})
 	var singleRepoParamsMap map[string]interface{}
 	var singleRepoParams interface{}
@@ -342,8 +351,16 @@ func (tcb *TransferConfigBase) createRepositoryAndAssignToProject(repoParams int
 	if err = tcb.TargetArtifactoryManager.CreateRepositoryWithParams(repoParams, repoDetails.Key); err != nil {
 		return
 	}
+	// if the project key was not empty and we are not skipping project assignments (default false)
 	if projectKey != "" {
-		return tcb.TargetAccessManager.AssignRepoToProject(repoDetails.Key, projectKey, true)
+		smartErr := tcb.TargetAccessManager.AssignRepoToProject(repoDetails.Key, projectKey, true)
+
+		if strings.Contains(smartErr.Error(), "already exists in another project") {
+			// project assignment conflict, did we set the option to skip?
+			if !tcb.SkipProjectAssignments {
+				return smartErr
+			}
+		}
 	}
 	return
 }
