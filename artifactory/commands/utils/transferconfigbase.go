@@ -143,12 +143,15 @@ func (tcb *TransferConfigBase) GetSelectedRepositories() (map[utils.RepoType][]s
 // Deactivate key encryption in Artifactory, to allow retrieving raw text values in the artifactory-config.xml or in a remote repository.
 func (tcb *TransferConfigBase) DeactivateKeyEncryption() (reactivateKeyEncryption func() error, err error) {
 	var wasEncrypted bool
+	// if was encrypted and had an error
 	if wasEncrypted, err = tcb.SourceArtifactoryManager.DeactivateKeyEncryption(); err != nil {
 		return func() error { return nil }, err
 	}
+	// if was not encrypted, DO NOT ENCRYPT
 	if !wasEncrypted {
 		return func() error { return nil }, nil
 	}
+	// if it was encrypted, re-encrypt after we have decrypted.
 	return tcb.SourceArtifactoryManager.ActivateKeyEncryption, nil
 }
 
@@ -360,6 +363,8 @@ func (tcb *TransferConfigBase) createRepositoryAndAssignToProject(repoParams int
 			if !tcb.SkipProjectAssignments {
 				return smartErr
 			}
+		} else {
+			return smartErr
 		}
 	}
 	return

@@ -306,6 +306,7 @@ func (tcc *TransferConfigCommand) NewPreChecksRunner(selectedRepos map[utils.Rep
 }
 
 func (tcc *TransferConfigCommand) getEncryptedItems(selectedSourceRepos map[utils.RepoType][]services.RepositoryDetails) (configXml string, remoteRepositories []interface{}, err error) {
+	// when rt is already decrypted, it will not encrypt afterwards
 	reactivateKeyEncryption, err := tcc.DeactivateKeyEncryption()
 	if err != nil {
 		return "", nil, err
